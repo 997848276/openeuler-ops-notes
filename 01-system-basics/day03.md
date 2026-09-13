@@ -90,3 +90,4 @@
 | sed -i.bak 就地替换 | ✅ 三次实战（resolv.conf / sshd_config）|
 | sshd_config 加固 | ✅ 含双向验证 |
 | journalctl 看服务日志 | ✅ journalctl -u / -f / last |
+
