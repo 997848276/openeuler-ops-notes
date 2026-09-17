@@ -172,12 +172,63 @@ sudo lvextend -r -L +5G /dev/data_vg/data_lv
 2. **`-L +NG` 冤案平反**：昨天差 1 个 extent 不是 `-L` 的错，是余粮刚好卡边界；今天池里有粮，`+5G` 稳过 —— **判据在余粮，不在写法**
 3. **扩容不改文件系统 UUID**：fstab 认身份证不认容量 → 扩容不动 fstab
 
+**彩蛋验证（08:02）：新 5G 到底长在哪块盘？**
+- `lvdisplay -m` 两段实锤：`Logical extents 0 to 5118 → /dev/sdb`、`Logical extents 5119 to 6398 → /dev/sdc (Physical extents 0 to 1279)` —— **老数据原地不动全在 sdb，新扩的 1280 个 extent 整段落 sdc**
+- `Type linear` = 线性映射：先排满一块再排下一块（**不是条带化并行**，并行是 striped/RAID0 的事）
+- `lsblk` 分身：`data_lv 253:2 25G /data` 在 **sdb 和 sdc 下面各出现一次** —— major:minor 相同 = 同一个设备的两个视图（"跨盘汇聚"最直的画面）
+
 **踩坑清单 +2（累计 10 条）**
 9. 热加盘 `lsblk` 看不到 ≠ 加盘失败 → 手动扫 SCSI 总线
 10. XFS 扩容后 `df` 的 Used 会涨一点（新空间元数据）→ 别误判"多了文件"
 
-## 九、下一步
+## 九、加练 · LVM 快照：照相 → 触发 COW → 参观旧世界 → 整盘回滚（08:04~08:11）
 
-- 推送 `day08.md` 到 GitHub（`01-system-basics/day08.md`）
-- 可选：LVM **快照**（`lvcreate -s`，改配置前先照相）
-- 明天：攻略 DAY5 · systemd 编排
+### 照相（COW 写时复制）
+
+```
+sudo lvcreate -s -n data_snap -L 2G /dev/data_vg/data_lv   # 从池子拿 2G 当档案柜
+sudo lvs
+```
+
+- `data_snap`：Attr **`s`** 开头（snapshot）｜Origin = `data_lv`｜Data% 0.00
+- **彩蛋**：`data_lv` 的 Attr 首位 `-`→**`o`**（origin，"被拍对象"身份标记）
+- 快照**不是**拷 25G：立规矩——**原盘哪块要被改写，先把旧内容抄进快照区，再放胆改**
+- **只为改动记账，不为存量付费** → 2G 的档案柜罩得住 25G 的盘（怕的不是盘大，是拍照后改得多）
+
+### 触发 COW（案发现场）
+
+```
+sudo dd if=/dev/urandom of=/data/secret.bin bs=1M count=500               # 写新文件 → Data% 不动
+sudo dd if=/dev/urandom of=/data/secret.bin bs=1M count=500 conv=notrunc  # 原地覆写 → Data% 24.51%
+```
+
+- 第一次 ≈0：新数据写**从未用过的块**，无旧内容可存档（"新人住新房间不用复印旧照"）
+- 第二次 **24.51%**（≈490M ≈ 500M 入柜，账能对上）：覆写已存在的块 → 旧内容先入柜再放行
+- **踩坑（AI 埋的雷）**：`lvs data_snap` → `Volume group "data_snap" not found` —— **`lvs` 的参数是 VG 不是 LV**；LV 必须**全路径 `data_vg/data_snap`**（LV 名只在 VG 内唯一，快递地址要写全）
+- 小彩蛋：第一次 dd 246 MB/s vs 第二次 554 MB/s —— **分新块比覆写热块慢**（元数据分配开销）
+
+### 参观旧世界 + 整盘回滚
+
+```
+sudo mount -o ro,nouuid /dev/data_vg/data_snap /mnt/snap   # nouuid：快照与源盘同 UUID，撞车必须豁免
+ls -lh /mnt/snap              # total 0：照相后才出生的 secret.bin，旧世界不存在
+sudo umount /mnt/snap && sudo umount /data
+sudo lvconvert --merge /dev/data_vg/data_snap    # Merged: 76.42% → 100.00%（进度条亲眼看）
+sudo mount /dev/data_vg/data_lv /data
+ls -lh /data/                 # total 0：secret.bin 消失（整盘连 inode 账本卷回那一刻）
+df -h /data                   # 522M —— 与照相前一秒分毫不差（1022M − 500M = 522M 闭环）
+```
+
+- merge 把 COW 档案批量写回原位（内核 kcopyd 后台搬，进度可见），写完**快照 LV 消失**（被吸收进源卷）
+- merge 前两边都必须 umount，否则回显 "will start next activation" —— **不报错但也不执行**，比报错更阴
+- **存疑彩蛋（诚实记录）**：快照视图 `df` Used 显示 **656K** 而非预期 ~522M —— 推断是只读视图的 Used 统计只计快照独占块（未改动块仍由原盘账本管理），未定论，**待深挖**
+
+### 坑清单 +3（DAY4 累计 13 条）
+
+11. `lvs <LV名>` 不认 → 参数是 VG；LV 用 `VG/LV` 全路径
+12. 快照挂载撞 UUID → `-o ro,nouuid`
+13. merge 前不 umount → "next activation" 推迟执行，不报错也不干活
+
+**面试一句话**
+> "LVM 快照是 COW 写时复制：拍照不搬数据，只在原块被改写前把旧内容存进快照区，所以小快照能罩大卷；挂载要 `-o ro,nouuid`（与源盘同 UUID）；回滚 `lvconvert --merge`（先卸载两边，否则推迟到下次激活）；典型场景：改配置/升级前先照相，砸了秒回滚。"
+
