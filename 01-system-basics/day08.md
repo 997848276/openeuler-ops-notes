@@ -232,8 +232,3 @@ df -h /data                   # 522M —— 与照相前一秒分毫不差（102
 **面试一句话**
 > "LVM 快照是 COW 写时复制：拍照不搬数据，只在原块被改写前把旧内容存进快照区，所以小快照能罩大卷；挂载要 `-o ro,nouuid`（与源盘同 UUID）；回滚 `lvconvert --merge`（先卸载两边，否则推迟到下次激活）；典型场景：改配置/升级前先照相，砸了秒回滚。"
 
-## 十、下一步
-
-- 收尾验收：`sudo lvs data_vg && sudo vgs data_vg`（data_snap 应已消失，VFree 回 <5.00g）
-- 追加推 `day08.md` 到 GitHub（含快照章节）
-- 下午 = 254（Docker/K8s）；明天：攻略 DAY5 · systemd 编排
