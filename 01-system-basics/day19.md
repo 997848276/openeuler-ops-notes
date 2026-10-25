@@ -98,6 +98,3 @@ yum + copy + service + shell(curl, changed_when:false)。实测：oe128 yum=ok(�
 5. shell 永远 changed → 查状态加 changed_when:false；command 不走管道
 6. changed 异常 → --diff
 7. playbook not found → 先查路径再查语法
-
-## 面试一句话
-> "我从零搭过 Ansible 管控：给加固机（PasswordAuth no）下发免密撞过 ssh-copy-id 死锁——密码通道关了只能从控制台内侧放公钥再 restorecon 修 SELinux；提权用 sudoers.d + visudo -c 防锁死。亲眼验证过幂等：copy 同文件跑四次 changed 从 1 到 0 稳定；中途踩过 SELinux 缺 python3-libselinux 致 copy 弃权，也学会 changed 异常上 --diff。最后 yum+copy+service 一个 playbook 双机 nginx，同一任务在已装机 ok、新机 changed——声明式不是概念是 RECAP 里看得见的数字。"
