@@ -481,32 +481,3 @@ rc=0
 | `sudo` 能跑但 systemd 报 `203` | 真实域 `init_t` 执行被拒，不是权限位问题 |
 | 看到 `Permission denied` 只查 `chmod` | SELinux 拒绝同款文案，`ausearch` 才分得清 |
 | 脚本属主是普通用户 | root 执行的脚本必须 `root:root` |
-
-## 十四 面试金句
-
-> **① 容器兜底**
-> "iSula 没有 restart policy，我用 systemd `Type=oneshot` + `RemainAfterExit=yes` 兜底，
-> 脚本做成幂等三分支（跑着跳过 / 停了 start / 没了 run），健康检查判的是'我的启动操作是否成功'，
-> 不是'端口在不在听'——端口可能被别的进程占着，那样会假成功。"
-
-> **② 重构验证**
-> "抽公共函数时我把测试重点只放在**重构会改变的那条路径**上——`skip` 和 `start` 分支跑一万次也碰不到
-> `run` 分支的参数拼接。所以我会主动删掉容器逼它走创建分支，再查时区和环境变量有没有在透传中丢掉。
-> **重构的安全感不能来自'看起来还在跑'。**"
-
-> **③ 健康检查与自愈分离**
-> "健康检查和自愈做成两个入口：`--check` 只读、退出码给监控读（0/1/2 区分健康、异常、用法错），
-> `--fix` 才动手。合成一个的话，监控探一次就把现场修好了——你永远看不到告警，也永远不知道为什么坏。"
-
-> **④ 最强一条（SELinux + systemd）**
-> "我用 `systemd-run` 在真实的 `init_t` 域里验证脚本能不能被执行——`sudo` 手跑在 `unconfined_t` 域，
-> `user_home_t` 的脚本照样能跑，完全看不出问题。实测被拒时是 `status=203`（`EXIT_EXEC`），
-> `ausearch` 里 `scontext=init_t`、`tcontext=user_home_t`、`permissive=0` 三条齐全，
-> 而且被拒的是 `access()` 不是 `execve`，所以 `runtime` 只有 1 毫秒。
-> **验证要在真实执行域里做，不是在宽松环境里做。**"
-
-> **⑤ 多层补偿**
-> "`Type=oneshot` + `RemainAfterExit=yes` 记的是'上次跑成功了'，不是'东西还在'——
-> 容器被外部删掉后 systemd 照样显示 active。这不是 bug 是 oneshot 的天性，
-> 解药是**多层补偿**：端口探活告警兜住 discovery，timer 兜住自动化修复。
-> **运维不是靠某个组件全能，是靠多层补偿。**"
