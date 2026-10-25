@@ -84,8 +84,4 @@ cat /proc/mdstat   → Personalities : / unused devices: <none>   ← 没有 RAI
 | 5 | 日志刷屏 | 先跑 TOP 榜，再顺藤摸瓜 |
 | 6 | 定时任务写 journal | 输出落文件或 logger -p info，别自己挤爆日志 |
 
-## 八 面试一句话
 
-> 「journalctl 三把钥匙：-u 服务、-b 开机、-p 级别，加 --since/--until 时间窗和 _PID 字段检索；
-> 查不到日志先做三问：谁在写、还剩多少、保留多久——我这台机器 SystemMaxUse=200M，被 node_exporter 触发 automount 刷了 11 万条、巡检脚本再叠 2.7 万，8 小时就撑满，昨天的事故日志全被挤掉；
-> 监控岗要治两件事：采集器排除 autofs 路径、脚本别往 journal 刷屏；容量与保留策略按合规显式配——日志是证据，证据留不住等于没有监控。」
