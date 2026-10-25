@@ -1,19 +1,16 @@
 # day43 · 性能排查四账本（上）—— load / CPU / 内存（2026-10-25 · 128 oe-base）
 
-
 > 本节对应手册 `openEuler命令解读与类比.md` 的 **§五十（上）**。
 
 ---
 
-## 一、块 0 · 开机自检
+## 一、开机基线（自检）
 
 ```bash
 date; uptime; who
 chronyc tracking | head -6
 df -h / /data; echo "---"; df -i /
 systemctl is-active isulad chronyd firewalld
-sudo git -C /root/openeuler-ops-notes log --oneline -3
-sudo git -C /root/openeuler-ops-notes status --short
 ```
 
 **实测回显要点**：
@@ -31,21 +28,16 @@ RMS offset    : 0.106312186 seconds
 /dev/mapper/data_vg-data_lv       25G  522M  25G   3%  /data
 
 isulad / chronyd / firewalld → 全 active
-
-7d23d7b (HEAD -> main, origin/main, origin/HEAD) feat(day42): ...
-a380942 fix: day40 正文标题编号笔误（day41 -> day40）
-53a807c feat(day41): iSula 自愈兜底 + 时钟慢 20 分钟破案（2026-10-23）
-（status --short 为空）
 ```
 
 **两个细节**：
 
 | 现象 | 判读 |
 |---|---|
-| `up 1 min` | 机器刚开机（昨天 10:01 后关机） |
+| `up 1 min` | 开机不足 1 分钟，load 三数尚在累积期 |
 | `System time = 0` 但 `RMS offset = 0.106s` | **当前是准的**；106ms 是开机时 chronyd 一次性纠正的**残影** |
 
-> ★ 判据沿用昨天结案的那条：**`System time` 才是"准不准"，`Last/RMS offset` 是历史痕迹。**
+> ★ 判据：**`System time` 才是准不准，`Last/RMS offset` 是历史痕迹。**
 
 ---
 
@@ -339,7 +331,7 @@ ps -eo pid,rss,comm --sort=-rss | head -8
 ```
 
 **我预测 TOP3 是 isulad / zabbix_agent2 / node_exporter —— 全错。**
-实际第一名是一个 **148 MiB 的 `python3`**，值得回头查清它是谁（遗留脚本？监控插件？）。
+实际第一名是一个 **148 MiB 的 `python3`**（身份未定：用 `ps -p 1229 -o args=` 可查其命令行）。
 
 ### 7.5 唯一的内存判据
 
@@ -411,28 +403,29 @@ load 高（先除 nproc）
 
 ---
 
-## 十一、今天的账（3 个打脸 + 1 个待查）
+## 十一、打脸台账（4 条）
 
-| # | 我错的 | 真相 |
+| # | 错误判断 | 实测真相 |
 |---|---|---|
 | 49 | 默认 128 是 4 核 | **2 核**，导致压测超载 2 倍 |
 | 50 | `vmstat` 读出"swap 用了 2.3G" | 列错位，`swpd=0` |
-| 51 | 进程 RSS 只有 100~200 MiB | **628 MiB**（忘了 iSula 里的容器） |
+| 51 | 进程 RSS 只有 100~200 MiB | **628 MiB**（忽略了 iSula 里的容器） |
 | 52 | TOP3 = isulad/zabbix/node_exporter | **python3 148 MiB 排第一** |
 
 **共同点**：**全是拿记忆里的数字套现场。四次预测全错，只有实测回显是对的。**
 
-**待查**：`python3` 那个 148 MiB 进程是谁。
+> ★ 定位方法：`ps -p 1229 -o pid,args` —— 先看 `args` 再断言进程身份。
 
 ---
 
-## 十二、面试一句话
+## 十二、一句话总结
 
 > 「看负载第一步先 `nproc`——load 是排队长度，不带分母没意义，2 核机的 4.0 是超载 100%，8 核机才半载。第二步拆 CPU 账：`us` 高是应用在算，`sy` 高是系统调用太多，`wa` 高是磁盘拖后腿——三种优化方向完全不同，`wa` 高时加 CPU 一点用没有。第三步看内存，`free` 小不是问题，Linux 会主动用内存做缓存，唯一判据是 `available` 逼近 0 才会 OOM。另外 load 是指数平均、有滞后：压测三十秒它才爬到四成，进程杀掉它还要挂一两分钟才降，所以判进程死没死只能靠 `pgrep`，不能靠 load。」
 
 ---
 
-## 附：今天没做完的
+## 附：本篇覆盖范围
 
-- §五十（下）：IO 账本（`iostat` / `iotop` / `Dirty` 与 `wa` 的因果）、网络账本（`ss` / `sar -n`）
-- 查清 `python3` 148 MiB 是哪个服务
+- **已覆盖**：load 三数 / `top` 的 `%Cpu` / `vmstat` 逐列 / 内存账本（`free`、`meminfo`、RSS↔PSS）
+- **未覆盖**：IO 账本（`iostat` / `iotop` / `Dirty` 与 `wa` 的因果）、网络账本（`ss` / `sar -n`）→ 属 §五十（下）
+
