@@ -71,6 +71,3 @@ ansible-playbook use_secret.yml --ask-vault-pass
 10. 宿主端口 8080/8081 被 docker-proxy 占 → 挑端口先 ss 探测
 11. SELinux 机器 nginx 监听非常规端口 → 只能 bind http_port_t 白名单，否则 semanage port -a
 12. vault 忘密码/忘带 --ask-vault-pass → 前者文件废，后者补参数即可
-
-## 面试一句话（进阶版）
-> "进阶我完整练过工程化四件套：template 用 Jinja2 给双机生成各自主机名虚拟主机——同一模板两份输出；handlers 做配置变更才触发 reload，三跑曲线 changed 4→0→0，零变更时 handler 整段不出现；roles 把一锅炖拆成 tasks/handlers/templates 目录契约，重构后 RECAP 零 changed 等价性机器验证；vault 用 AES256 原地加密敏感变量，--ask-vault-pass 解密，debug 只打指纹。挑端口还用上了 SELinux http_port_t 白名单——8008 零配置，18080 就得 semanage port 放行。"
