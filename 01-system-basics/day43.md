@@ -429,3 +429,4 @@ load 高（先除 nproc）
 - **已覆盖**：load 三数 / `top` 的 `%Cpu` / `vmstat` 逐列 / 内存账本（`free`、`meminfo`、RSS↔PSS）
 - **未覆盖**：IO 账本（`iostat` / `iotop` / `Dirty` 与 `wa` 的因果）、网络账本（`ss` / `sar -n`）→ 属 §五十（下）
 
+
